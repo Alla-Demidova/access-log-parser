@@ -8,6 +8,8 @@ import java.util.Scanner;
 public class Main {
     public static void main(String[] args) {
         int fileCounter = 0;
+        Statistics stats = new Statistics();
+
         while (true) {
             System.out.println("Введите путь к файлу: ");
             String path = new Scanner(System.in).nextLine();
@@ -24,6 +26,7 @@ public class Main {
             fileCounter++;
             System.out.println("Это файл номер " + fileCounter);
 
+            // Чтение файла с обработкой исключений
             try {
                 FileReader fileReader = new FileReader(path);
                 BufferedReader reader = new BufferedReader(fileReader);
@@ -36,6 +39,7 @@ public class Main {
                 while ((line = reader.readLine()) != null) {
                     int length = line.length();
 
+                    // Проверка на превышение лимита длины строки
                     if (length > 1024) {
                         throw new LineTooLongException(
                                 "Строка длиной " + length +
@@ -45,22 +49,24 @@ public class Main {
 
                     totalLines++;
 
+                    // Создаем объект LogEntry для парсинга строки
+                    LogEntry entry = new LogEntry(line);
 
-                    String userAgent = extractUserAgent(line);
-                    if (userAgent != null) {
-                        String botName = extractBotName(userAgent);
+                    // Добавляем запись в статистику
+                    stats.addEntry(entry);
 
-                        if ("YandexBot".equals(botName)) {
-                            yandexBotCount++;
-                        } else if ("Googlebot".equals(botName)) {
-                            googleBotCount++;
-                        }
+                    // Подсчет ботов через UserAgent
+                    String browser = entry.getUserAgent().getBrowser();
+                    if ("YandexBot".equals(browser)) {
+                        yandexBotCount++;
+                    } else if ("Googlebot".equals(browser)) {
+                        googleBotCount++;
                     }
                 }
 
                 reader.close();
 
-
+                // Вывод статистики по ботам
                 System.out.println("Общее количество строк в файле: " + totalLines);
 
                 if (totalLines > 0) {
@@ -71,6 +77,13 @@ public class Main {
                             yandexShare, yandexBotCount, totalLines);
                     System.out.printf("Доля запросов от Googlebot: %.2f%% (%d из %d)%n",
                             googleShare, googleBotCount, totalLines);
+
+                    // Вывод статистики трафика
+                    System.out.println("\n--- Статистика трафика ---");
+                    System.out.println("Общий объем трафика: " + stats.getTotalTraffic() + " байт");
+                    System.out.println("Первая запись: " + stats.getMinTime());
+                    System.out.println("Последняя запись: " + stats.getMaxTime());
+                    System.out.printf("Средний трафик в час: %.2f байт/час%n", stats.getTrafficRate());
                 } else {
                     System.out.println("Файл пуст");
                 }
@@ -78,6 +91,7 @@ public class Main {
             } catch (LineTooLongException e) {
                 System.err.println("Ошибка: " + e.getMessage());
                 e.printStackTrace();
+                // Прерываем выполнение при слишком длинной строке
                 break;
             } catch (IOException e) {
                 System.err.println("Ошибка ввода-вывода: " + e.getMessage());
@@ -87,43 +101,5 @@ public class Main {
                 e.printStackTrace();
             }
         }
-    }
-
-
-    private static String extractUserAgent(String logLine) {
-        int lastQuoteIndex = logLine.lastIndexOf('"');
-        if (lastQuoteIndex > 0) {
-            int firstQuoteIndex = logLine.lastIndexOf('"', lastQuoteIndex - 1);
-            if (firstQuoteIndex >= 0) {
-                return logLine.substring(firstQuoteIndex + 1, lastQuoteIndex);
-            }
-        }
-        return null;
-    }
-
-
-    private static String extractBotName(String userAgent) {
-        try {
-            int openBracket = userAgent.indexOf('(');
-            int closeBracket = userAgent.indexOf(')', openBracket);
-
-            if (openBracket >= 0 && closeBracket > openBracket) {
-                String bracketsContent = userAgent.substring(openBracket + 1, closeBracket);
-
-                String[] parts = bracketsContent.split(";");
-
-                if (parts.length >= 2) {
-                    String fragment = parts[1].trim();
-
-                    int slashIndex = fragment.indexOf('/');
-                    if (slashIndex > 0) {
-                        return fragment.substring(0, slashIndex);
-                    }
-                    return fragment;
-                }
-            }
-        } catch (Exception e) {
-        }
-        return null;
     }
 }
